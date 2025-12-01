@@ -1,0 +1,192 @@
+{
+  "name": "Chatwoot Message Handler",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "chatwoot",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-trigger",
+      "name": "Webhook - Receive from Chatwoot",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1.1,
+      "position": [240, 300],
+      "webhookId": "chatwoot-messages"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{$json[\"event\"]}}",
+              "operation": "equals",
+              "value2": "message_created"
+            }
+          ]
+        }
+      },
+      "id": "filter-message-created",
+      "name": "Is Message Created?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{$json[\"message_type\"]}}",
+              "operation": "equals",
+              "value2": "incoming"
+            }
+          ]
+        }
+      },
+      "id": "filter-incoming",
+      "name": "Is Customer Message?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [680, 200]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extract and process message data\nconst message = $input.item.json.content?.toLowerCase() || '';\nconst senderName = $input.item.json.sender?.name || 'there';\nconst conversationId = $input.item.json.conversation?.id;\nconst accountId = $input.item.json.account?.id;\n\n// Simple intent classification\nlet intent = 'general';\nlet response = '';\n\nif (message.includes('hello') || message.includes('hi') || message.includes('hey')) {\n  intent = 'greeting';\n  response = `Hi ${senderName}! 👋 Thanks for reaching out. How can I help you today?`;\n} else if (message.includes('price') || message.includes('cost') || message.includes('how much')) {\n  intent = 'pricing';\n  response = `Thanks for asking about pricing! I'd be happy to help. What product or service are you interested in?`;\n} else if (message.includes('help') || message.includes('support') || message.includes('issue') || message.includes('problem')) {\n  intent = 'support';\n  response = `I'm here to help! Could you tell me more about what you need assistance with?`;\n} else if (message.includes('order') || message.includes('track') || message.includes('shipping') || message.includes('delivery')) {\n  intent = 'order_status';\n  response = `I can help you with your order! Please provide your order number and I'll look it up for you.`;\n} else if (message.includes('thank') || message.includes('thanks')) {\n  intent = 'thanks';\n  response = `You're welcome! Is there anything else I can help you with?`;\n} else {\n  intent = 'general';\n  response = `Thanks for your message! Let me help you with that. One moment please.`;\n}\n\nreturn {\n  conversation_id: conversationId,\n  account_id: accountId,\n  sender_name: senderName,\n  original_message: $input.item.json.content,\n  intent: intent,\n  response_text: response\n};"
+      },
+      "id": "process-message",
+      "name": "Process Message & Generate Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [900, 100]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=http://chatwoot:3000/api/v1/accounts/{{$json[\"account_id\"]}}/conversations/{{$json[\"conversation_id\"]}}/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"content\": \"{{$json[\"response_text\"]}}\",\n  \"message_type\": \"outgoing\",\n  \"private\": false\n}",
+        "options": {}
+      },
+      "id": "send-to-chatwoot",
+      "name": "Send Response to Chatwoot",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1120, 100],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "chatwoot-api",
+          "name": "Chatwoot API Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\"status\": \"success\", \"message\": \"Message processed and response sent\"}",
+        "options": {}
+      },
+      "id": "respond-success",
+      "name": "Respond - Success",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1340, 200]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\"status\": \"ignored\", \"reason\": \"Not a customer message or not a message_created event\"}",
+        "options": {}
+      },
+      "id": "respond-ignored",
+      "name": "Respond - Ignored",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [900, 400]
+    }
+  ],
+  "connections": {
+    "Webhook - Receive from Chatwoot": {
+      "main": [
+        [
+          {
+            "node": "Is Message Created?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Message Created?": {
+      "main": [
+        [
+          {
+            "node": "Is Customer Message?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond - Ignored",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Customer Message?": {
+      "main": [
+        [
+          {
+            "node": "Process Message & Generate Response",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond - Ignored",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process Message & Generate Response": {
+      "main": [
+        [
+          {
+            "node": "Send Response to Chatwoot",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Response to Chatwoot": {
+      "main": [
+        [
+          {
+            "node": "Respond - Success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 1,
+  "updatedAt": "2024-11-28T00:00:00.000Z",
+  "versionId": "1"
+}

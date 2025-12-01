@@ -2,17 +2,16 @@ version: '3.8'
 
 services:
   # PostgreSQL Database
-  # TODO: Review and adjust database settings for production
   postgres:
     image: postgres:15-alpine
     restart: unless-stopped
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      # TODO: Consider using separate databases for n8n and Chatwoot
       POSTGRES_DB: postgres
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - ./scripts/init-db.sql:/docker-entrypoint-initdb.d/init.sql
     ports:
       - "5432:5432"
     healthcheck:
@@ -36,7 +35,6 @@ services:
       retries: 5
 
   # n8n Workflow Automation
-  # TODO: Configure n8n settings, add webhooks, set up encryption key
   n8n:
     image: n8nio/n8n:latest
     restart: unless-stopped
@@ -52,21 +50,18 @@ services:
       - N8N_BASIC_AUTH_ACTIVE=true
       - N8N_BASIC_AUTH_USER=${N8N_BASIC_AUTH_USER}
       - N8N_BASIC_AUTH_PASSWORD=${N8N_BASIC_AUTH_PASSWORD}
-      # TODO: Set N8N_HOST for webhooks if using a domain
-      # - N8N_HOST=${N8N_HOST}
-      # - N8N_PROTOCOL=https
-      # - WEBHOOK_URL=${N8N_WEBHOOK_URL}
+      - N8N_HOST=localhost
+      - N8N_PORT=5678
+      - N8N_PROTOCOL=http
+      - WEBHOOK_URL=http://localhost:5678
     volumes:
       - n8n_data:/home/node/.n8n
       - ./n8n/workflows:/home/node/.n8n/workflows
     depends_on:
       postgres:
         condition: service_healthy
-      redis:
-        condition: service_healthy
 
   # Chatwoot Web Service
-  # TODO: Configure frontend URL, email settings, storage settings
   chatwoot:
     image: chatwoot/chatwoot:latest
     restart: unless-stopped
@@ -82,21 +77,16 @@ services:
       - REDIS_URL=redis://redis:6379
       - SECRET_KEY_BASE=${CHATWOOT_SECRET_KEY_BASE}
       - FRONTEND_URL=${CHATWOOT_FRONTEND_URL:-http://localhost:3000}
-      # TODO: Configure email settings (SMTP)
-      # - MAILER_SENDER_EMAIL=${MAILER_SENDER_EMAIL}
-      # - SMTP_ADDRESS=${SMTP_ADDRESS}
-      # - SMTP_PORT=${SMTP_PORT}
-      # TODO: Configure storage (S3, local, etc.)
-      # - ACTIVE_STORAGE_SERVICE=local
+      - RAILS_LOG_TO_STDOUT=true
+      - INSTALLATION_NAME=CustomerServiceBot
     volumes:
       - chatwoot_data:/app/storage
-      - ./chatwoot/config:/app/config
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
-    command: bundle exec rails server -b 0.0.0.0 -p 3000
+    command: bundle exec rails db:chatwoot_prepare && bundle exec rails s -b 0.0.0.0 -p 3000
 
   # Chatwoot Sidekiq (Background Jobs)
   chatwoot-sidekiq:
