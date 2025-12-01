@@ -3,7 +3,7 @@ version: '3.8'
 services:
   # PostgreSQL Database
   postgres:
-    image: postgres:15-alpine
+    image: pgvector/pgvector:pg15
     restart: unless-stopped
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
@@ -66,7 +66,7 @@ services:
     image: chatwoot/chatwoot:latest
     restart: unless-stopped
     ports:
-      - "3000:3000"
+      - "3001:3000"
     environment:
       - RAILS_ENV=production
       - POSTGRES_HOST=postgres
@@ -76,7 +76,7 @@ services:
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
       - REDIS_URL=redis://redis:6379
       - SECRET_KEY_BASE=${CHATWOOT_SECRET_KEY_BASE}
-      - FRONTEND_URL=${CHATWOOT_FRONTEND_URL:-http://localhost:3000}
+      - FRONTEND_URL=${CHATWOOT_FRONTEND_URL:-http://localhost:3001}
       - RAILS_LOG_TO_STDOUT=true
       - INSTALLATION_NAME=CustomerServiceBot
     volumes:
@@ -86,7 +86,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-    command: bundle exec rails db:chatwoot_prepare && bundle exec rails s -b 0.0.0.0 -p 3000
+    entrypoint: sh
+    command: -c "bundle exec rails db:chatwoot_prepare && bundle exec rails s -b 0.0.0.0 -p 3000"
 
   # Chatwoot Sidekiq (Background Jobs)
   chatwoot-sidekiq:
