@@ -8,79 +8,67 @@
         "responseMode": "responseNode",
         "options": {}
       },
-      "id": "webhook-trigger",
+      "id": "39e73beb-733f-4fc9-b45c-a0b02e95b330",
       "name": "Webhook - Receive from Chatwoot",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 1.1,
-      "position": [240, 300],
+      "position": [
+        -200,
+        0
+      ],
       "webhookId": "chatwoot-messages"
     },
     {
       "parameters": {
-        "conditions": {
-          "string": [
-            {
-              "value1": "={{$json[\"event\"]}}",
-              "operation": "equals",
-              "value2": "message_created"
-            }
-          ]
-        }
+        "jsCode": "// Vitrinnea webhook structure: data is double-nested in body.body\nconst raw = $input.item.json;\nconst body = raw.body?.body || raw.body || {};\n\n// Check if this is an outgoing message (from bot) - skip those to prevent infinite loop\nconst messageType = body.message_type;\nconst senderType = body.sender?.type;\n\nif (messageType === 'outgoing' || (senderType && senderType !== 'contact')) {\n  return [];\n}\n\n// Extract IDs from body\nconst conversationId = body.conversation?.id;\nconst accountId = body.account?.id;\n\nif (!conversationId || !accountId) {\n  return [];\n}\n\nconst message = (body.content || '').toLowerCase();\nconst senderName = body.sender?.name || 'cliente';\n\n// Business hours (Costa Rica time - assuming UTC-6)\nconst now = new Date();\nconst hour = now.getHours();\nconst day = now.getDay();\nconst isBusinessHours = (day >= 1 && day <= 5) && (hour >= 9 && hour < 18);\n\n// Extract order number if present\nconst orderMatch = message.match(/#?(\\d{4,8})/);\nconst orderNumber = orderMatch ? orderMatch[1] : null;\n\n// Sentiment detection\nconst urgentWords = ['urgente', 'asap', 'rápido', 'ya', 'ahora', 'emergencia'];\nconst negativeWords = ['enojado', 'molesto', 'terrible', 'malo', 'pésimo', 'horrible'];\nconst isUrgent = urgentWords.some(word => message.includes(word));\nconst isNegative = negativeWords.some(word => message.includes(word));\n\nlet intent = 'general';\nlet response = '';\n\n// Intent classification with Spanish responses\nif (message.includes('hola') || message.includes('buenos') || message.includes('buenas') || message.includes('hello') || message.includes('hi')) {\n  intent = 'greeting';\n  response = isBusinessHours \n    ? `¡Hola ${senderName}! 👋 Bienvenido a Vitrinnea. ¿En qué puedo ayudarte hoy?`\n    : `¡Hola ${senderName}! 👋 Estamos fuera de horario (Lun-Vie 9am-6pm), pero igual puedo ayudarte. ¿Qué necesitas?`;\n} else if (message.includes('precio') || message.includes('cost') || message.includes('cuánto') || message.includes('cuanto')) {\n  intent = 'pricing';\n  response = '💰 Con gusto te ayudo con información de precios. ¿Qué producto te interesa? Puedes enviarme el nombre o enlace del artículo.';\n} else if (message.includes('devol') || message.includes('reembolso') || message.includes('cancelar')) {\n  intent = 'returns';\n  response = orderNumber\n    ? `📦 Entendido, revisaré tu pedido #${orderNumber} para procesar la devolución. Nuestras políticas permiten devoluciones dentro de 30 días. ¿Cuál es el motivo?`\n    : '📦 Puedo ayudarte con devoluciones. Por favor proporcioname tu número de orden para revisar tu caso.';\n} else if (message.includes('envio') || message.includes('envío') || message.includes('entrega') || message.includes('delivery') || message.includes('shipping')) {\n  intent = 'shipping';\n  response = '🚚 Nuestros tiempos de envío son:\\n\\n• Envío Estándar: 5-7 días hábiles\\n• Envío Express: 2-3 días hábiles\\n\\n¿Necesitas rastrear un pedido o tienes alguna pregunta específica?';\n} else if (message.includes('pedido') || message.includes('orden') || message.includes('order') || message.includes('rastreo') || message.includes('track')) {\n  intent = 'order_status';\n  response = orderNumber\n    ? `🔍 Perfecto, déjame verificar el estado de tu orden #${orderNumber}. Un momento por favor...`\n    : '🔍 Para revisar tu pedido necesito el número de orden. Lo encuentras en tu correo de confirmación (ejemplo: #12345).';\n} else if (message.includes('pago') || message.includes('cobro') || message.includes('tarjeta') || message.includes('factura')) {\n  intent = 'billing';\n  response = '💳 Te ayudo con temas de facturación. ¿Cuál es tu consulta específica? (problemas de cobro, solicitud de factura, métodos de pago, etc.)';\n} else if (message.includes('cuenta') || message.includes('perfil') || message.includes('contraseña') || message.includes('login')) {\n  intent = 'account';\n  response = '👤 Para asistencia con tu cuenta, puedo ayudarte con:\\n\\n• Recuperar contraseña\\n• Actualizar información\\n• Problemas de acceso\\n\\n¿Qué necesitas?';\n} else if (message.includes('disponib') || message.includes('stock') || message.includes('hay')) {\n  intent = 'availability';\n  response = '📊 Para verificar disponibilidad, necesito saber qué producto te interesa. ¿Me puedes compartir el nombre o enlace?';\n} else if (message.includes('queja') || message.includes('reclam') || message.includes('problema') || isNegative) {\n  intent = 'complaint';\n  response = `😔 Lamento mucho que hayas tenido una mala experiencia, ${senderName}. Tu satisfacción es muy importante. Por favor cuéntame qué sucedió para resolverlo cuanto antes. ${isBusinessHours ? 'También puedo transferirte con un supervisor.' : 'Puedes solicitar hablar con un supervisor mañana en horario laboral.'}`;\n} else if (message.includes('horario') || message.includes('schedule') || message.includes('abierto')) {\n  intent = 'hours';\n  response = '🕐 Nuestro horario de atención es:\\n\\nLunes a Viernes: 9:00 AM - 6:00 PM (Hora Costa Rica)\\nSábados y Domingos: Cerrado\\n\\n¿En qué más puedo ayudarte?';\n} else if (message.includes('contacto') || message.includes('teléfono') || message.includes('email') || message.includes('whatsapp')) {\n  intent = 'contact';\n  response = '📞 Puedes contactarnos por:\\n\\n• Chat (aquí mismo)\\n• Email: soporte@vitrinnea.com\\n• WhatsApp: [número]\\n• Teléfono: [número]\\n\\n¿Prefieres algún canal en particular?';\n} else if (message.includes('ayuda') || message.includes('help') || message.includes('soporte') || message.includes('support')) {\n  intent = 'support';\n  response = '🆘 Estoy aquí para ayudarte. Puedo asistirte con:\\n\\n• Estado de pedidos 📦\\n• Envíos y entregas 🚚\\n• Devoluciones y cambios 🔄\\n• Información de productos 🛍️\\n• Facturación 💳\\n\\n¿Qué necesitas?';\n} else if (message.includes('gracias') || message.includes('thank')) {\n  intent = 'thanks';\n  response = '¡De nada! 😊 ¿Hay algo más en lo que pueda ayudarte?';\n} else if (message.includes('adios') || message.includes('adiós') || message.includes('bye') || message.includes('chao')) {\n  intent = 'goodbye';\n  response = '¡Hasta pronto! 👋 Que tengas un excelente día. Estamos aquí cuando nos necesites.';\n} else {\n  intent = 'general';\n  response = `Hola ${senderName}, gracias por escribirnos. ¿En qué puedo ayudarte hoy? Puedo asistirte con pedidos, envíos, productos, devoluciones y más. 😊`;\n}\n\n// Add urgency flag if detected\nif (isUrgent && isBusinessHours) {\n  response += '\\n\\n⚡ Veo que es urgente. Si necesitas atención inmediata, puedo transferirte con un agente humano.';\n}\n\nreturn {\n  conversation_id: conversationId,\n  account_id: accountId,\n  sender_name: senderName,\n  original_message: body.content,\n  intent: intent,\n  response_text: response,\n  is_urgent: isUrgent,\n  is_negative: isNegative,\n  order_number: orderNumber\n};"
       },
-      "id": "filter-message-created",
-      "name": "Is Message Created?",
-      "type": "n8n-nodes-base.if",
-      "typeVersion": 1,
-      "position": [460, 300]
-    },
-    {
-      "parameters": {
-        "conditions": {
-          "string": [
-            {
-              "value1": "={{$json[\"message_type\"]}}",
-              "operation": "equals",
-              "value2": "incoming"
-            }
-          ]
-        }
-      },
-      "id": "filter-incoming",
-      "name": "Is Customer Message?",
-      "type": "n8n-nodes-base.if",
-      "typeVersion": 1,
-      "position": [680, 200]
-    },
-    {
-      "parameters": {
-        "jsCode": "// Extract and process message data\nconst message = $input.item.json.content?.toLowerCase() || '';\nconst senderName = $input.item.json.sender?.name || 'there';\nconst conversationId = $input.item.json.conversation?.id;\nconst accountId = $input.item.json.account?.id;\n\n// Simple intent classification\nlet intent = 'general';\nlet response = '';\n\nif (message.includes('hello') || message.includes('hi') || message.includes('hey')) {\n  intent = 'greeting';\n  response = `Hi ${senderName}! 👋 Thanks for reaching out. How can I help you today?`;\n} else if (message.includes('price') || message.includes('cost') || message.includes('how much')) {\n  intent = 'pricing';\n  response = `Thanks for asking about pricing! I'd be happy to help. What product or service are you interested in?`;\n} else if (message.includes('help') || message.includes('support') || message.includes('issue') || message.includes('problem')) {\n  intent = 'support';\n  response = `I'm here to help! Could you tell me more about what you need assistance with?`;\n} else if (message.includes('order') || message.includes('track') || message.includes('shipping') || message.includes('delivery')) {\n  intent = 'order_status';\n  response = `I can help you with your order! Please provide your order number and I'll look it up for you.`;\n} else if (message.includes('thank') || message.includes('thanks')) {\n  intent = 'thanks';\n  response = `You're welcome! Is there anything else I can help you with?`;\n} else {\n  intent = 'general';\n  response = `Thanks for your message! Let me help you with that. One moment please.`;\n}\n\nreturn {\n  conversation_id: conversationId,\n  account_id: accountId,\n  sender_name: senderName,\n  original_message: $input.item.json.content,\n  intent: intent,\n  response_text: response\n};"
-      },
-      "id": "process-message",
+      "id": "870763de-7a67-45ef-a8e6-821168e81615",
       "name": "Process Message & Generate Response",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [900, 100]
+      "position": [
+        0,
+        0
+      ]
     },
     {
       "parameters": {
         "method": "POST",
-        "url": "=http://chatwoot:3000/api/v1/accounts/{{$json[\"account_id\"]}}/conversations/{{$json[\"conversation_id\"]}}/messages",
+        "url": "=https://chat-sv.service.vitrinnea.com/api/v1/accounts/{{$json[\"account_id\"]}}/conversations/{{$json[\"conversation_id\"]}}/messages",
         "authentication": "genericCredentialType",
         "genericAuthType": "httpHeaderAuth",
         "sendBody": true,
-        "specifyBody": "json",
-        "jsonBody": "={\n  \"content\": \"{{$json[\"response_text\"]}}\",\n  \"message_type\": \"outgoing\",\n  \"private\": false\n}",
+        "specifyBody": "keypair",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "content",
+              "value": "={{ $json.response_text }}"
+            },
+            {
+              "name": "message_type",
+              "value": "outgoing"
+            },
+            {
+              "name": "private",
+              "value": false
+            }
+          ]
+        },
         "options": {}
       },
-      "id": "send-to-chatwoot",
+      "id": "ab05d55d-4515-466b-8682-ddeebbc34697",
       "name": "Send Response to Chatwoot",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
-      "position": [1120, 100],
+      "position": [
+        200,
+        0
+      ],
       "credentials": {
         "httpHeaderAuth": {
-          "id": "chatwoot-api",
-          "name": "Chatwoot API Token"
+          "id": "0A9w8MYKOXlFtIYW",
+          "name": "Header Auth account"
         }
       }
     },
@@ -90,67 +78,23 @@
         "responseBody": "={\"status\": \"success\", \"message\": \"Message processed and response sent\"}",
         "options": {}
       },
-      "id": "respond-success",
+      "id": "1a96d78b-e7d9-408a-af16-9be09e572a6b",
       "name": "Respond - Success",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1,
-      "position": [1340, 200]
-    },
-    {
-      "parameters": {
-        "respondWith": "json",
-        "responseBody": "={\"status\": \"ignored\", \"reason\": \"Not a customer message or not a message_created event\"}",
-        "options": {}
-      },
-      "id": "respond-ignored",
-      "name": "Respond - Ignored",
-      "type": "n8n-nodes-base.respondToWebhook",
-      "typeVersion": 1,
-      "position": [900, 400]
+      "position": [
+        400,
+        0
+      ]
     }
   ],
+  "pinData": {},
   "connections": {
     "Webhook - Receive from Chatwoot": {
       "main": [
         [
           {
-            "node": "Is Message Created?",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Is Message Created?": {
-      "main": [
-        [
-          {
-            "node": "Is Customer Message?",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Respond - Ignored",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Is Customer Message?": {
-      "main": [
-        [
-          {
             "node": "Process Message & Generate Response",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Respond - Ignored",
             "type": "main",
             "index": 0
           }
@@ -180,13 +124,14 @@
       ]
     }
   },
-  "pinData": {},
+  "active": true,
   "settings": {
     "executionOrder": "v1"
   },
-  "staticData": null,
-  "tags": [],
-  "triggerCount": 1,
-  "updatedAt": "2024-11-28T00:00:00.000Z",
-  "versionId": "1"
+  "versionId": "5e64e549-f11f-4308-bf51-b1274ca8d662",
+  "meta": {
+    "instanceId": "a3b6737e35aa2734674677b22160e82aca50243db3512a23ffddd25f73e78d7d"
+  },
+  "id": "QI1fj6GtjBeVglht",
+  "tags": []
 }

@@ -1,7 +1,7 @@
 version: '3.8'
 
 services:
-  # PostgreSQL Database
+  # PostgreSQL Database (for n8n only)
   postgres:
     image: pgvector/pgvector:pg15
     restart: unless-stopped
@@ -20,21 +20,7 @@ services:
       timeout: 5s
       retries: 5
 
-  # Redis Cache
-  redis:
-    image: redis:7-alpine
-    restart: unless-stopped
-    volumes:
-      - redis_data:/data
-    ports:
-      - "6379:6379"
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
-  # n8n Workflow Automation
+  # n8n Workflow Automation (connects to Vitrinnea's Chatwoot)
   n8n:
     image: n8nio/n8n:latest
     restart: unless-stopped
@@ -53,7 +39,7 @@ services:
       - N8N_HOST=localhost
       - N8N_PORT=5678
       - N8N_PROTOCOL=http
-      - WEBHOOK_URL=http://localhost:5678
+      - WEBHOOK_URL=https://deedee-unascertainable-giuliana.ngrok-free.dev
     volumes:
       - n8n_data:/home/node/.n8n
       - ./n8n/workflows:/home/node/.n8n/workflows
@@ -61,60 +47,6 @@ services:
       postgres:
         condition: service_healthy
 
-  # Chatwoot Web Service
-  chatwoot:
-    image: chatwoot/chatwoot:latest
-    restart: unless-stopped
-    ports:
-      - "3001:3000"
-    environment:
-      - RAILS_ENV=production
-      - POSTGRES_HOST=postgres
-      - POSTGRES_PORT=5432
-      - POSTGRES_DATABASE=${CHATWOOT_DATABASE:-chatwoot_production}
-      - POSTGRES_USERNAME=${POSTGRES_USER}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
-      - REDIS_URL=redis://redis:6379
-      - SECRET_KEY_BASE=${CHATWOOT_SECRET_KEY_BASE}
-      - FRONTEND_URL=${CHATWOOT_FRONTEND_URL:-http://localhost:3001}
-      - RAILS_LOG_TO_STDOUT=true
-      - INSTALLATION_NAME=CustomerServiceBot
-    volumes:
-      - chatwoot_data:/app/storage
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    entrypoint: sh
-    command: -c "bundle exec rails db:chatwoot_prepare && bundle exec rails s -b 0.0.0.0 -p 3000"
-
-  # Chatwoot Sidekiq (Background Jobs)
-  chatwoot-sidekiq:
-    image: chatwoot/chatwoot:latest
-    restart: unless-stopped
-    environment:
-      - RAILS_ENV=production
-      - POSTGRES_HOST=postgres
-      - POSTGRES_PORT=5432
-      - POSTGRES_DATABASE=${CHATWOOT_DATABASE:-chatwoot_production}
-      - POSTGRES_USERNAME=${POSTGRES_USER}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
-      - REDIS_URL=redis://redis:6379
-      - SECRET_KEY_BASE=${CHATWOOT_SECRET_KEY_BASE}
-    volumes:
-      - chatwoot_data:/app/storage
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-      chatwoot:
-        condition: service_started
-    command: bundle exec sidekiq -C config/sidekiq.yml
-
 volumes:
   postgres_data:
-  redis_data:
   n8n_data:
-  chatwoot_data:
