@@ -1,11 +1,6 @@
 // Vitrinnea Customer Service Bot - Message Handler with Menu & Multi-Inbox Support
 // This code runs in n8n Code node to process Chatwoot messages
 
-// Supabase Configuration (set these in n8n environment variables)
-const SUPABASE_URL = $env.SUPABASE_URL || '';
-const SUPABASE_KEY = $env.SUPABASE_ANON_KEY || '';
-const TRACK_ANALYTICS = !!(SUPABASE_URL && SUPABASE_KEY);
-
 // Extract webhook data (Vitrinnea's structure is double-nested)
 const raw = $input.item.json;
 const body = raw.body?.body || raw.body || {};
@@ -27,13 +22,29 @@ if (!conversationId || !accountId) {
   return [];
 }
 
-// CONFIGURATION (Update these values for your business)
-const config = {
-  name: 'Vitrinnea',
-  supportEmail: 'soporte@vitrinnea.com',
-  phone: '+506 XXXX-XXXX',
-  helpCenterUrl: 'https://your-chatwoot-url.com/hc/your-portal' // Your Chatwoot Help Center URL
+// INBOX-SPECIFIC CONFIGURATIONS
+const inboxConfig = {
+  17: { // WhatsApp El Salvador
+    name: 'WhatsApp SV',
+    greeting: 'WhatsApp',
+    supportEmail: 'soporte-sv@vitrinnea.com',
+    phone: '+503 XXXX-XXXX'
+  },
+  23: { // WhatsApp (default)
+    name: 'WhatsApp',
+    greeting: 'WhatsApp',
+    supportEmail: 'soporte@vitrinnea.com',
+    phone: '+506 XXXX-XXXX'
+  },
+  default: {
+    name: 'Chat',
+    greeting: 'Vitrinnea',
+    supportEmail: 'soporte@vitrinnea.com',
+    phone: '+506 XXXX-XXXX'
+  }
 };
+
+const inbox = inboxConfig[inboxId] || inboxConfig.default;
 
 const message = (body.content || '').toLowerCase().trim();
 const senderName = body.sender?.name || 'cliente';
@@ -58,18 +69,10 @@ let intent = 'general';
 let response = '';
 let needsHuman = false;
 
-// MENU OPTIONS (detect numbers 0-9 or "menu")
-if (message.includes('menu') || message.includes('menú') || message.includes('opciones')) {
+// MENU OPTIONS (detect numbers 1-9 or "menu")
+if (message === '1' || message.includes('menu') || message.includes('menú') || message.includes('opciones')) {
   intent = 'menu';
-  response = `📋 *Menú de Opciones - ${config.name}*\n\nEscribe el número de tu consulta:\n\n0️⃣ 📚 Centro de Ayuda y Tutoriales\n1️⃣ Estado de mi pedido\n2️⃣ Información de envío\n3️⃣ Devoluciones y cambios\n4️⃣ Precios y productos\n5️⃣ Problemas con mi cuenta\n6️⃣ Facturación y pagos\n7️⃣ Disponibilidad de productos\n8️⃣ Horarios y contacto\n9️⃣ 🙋 Hablar con un agente humano\n\n💬 O simplemente escribe tu pregunta y te ayudaré.`;
-  
-} else if (message === '0' || message.includes('centro de ayuda') || message.includes('tutoriales') || message.includes('tutorial') || message.includes('ayuda visual')) {
-  intent = 'help_center';
-  response = `📚 *Centro de Ayuda*\n\nVisita nuestro Centro de Ayuda para:\n✅ Guías paso a paso\n✅ Preguntas frecuentes\n✅ Tutoriales en video\n✅ Artículos de ayuda\n\n🔗 ${config.helpCenterUrl}\n\n🎥 También tenemos tutoriales en YouTube:\nhttps://www.youtube.com/@shopvitrinnea\n\n_Escribe MENU para volver o tu pregunta directamente._`;
-  
-} else if (message === '1') {
-  intent = 'order_status';
-  response = '🔍 *Estado de Pedido*\n\nPara revisar tu pedido necesito el número de orden. Lo encuentras en tu correo de confirmación.\n\nEjemplo: #12345\n\nEnvíame tu número de orden por favor.';
+  response = `📋 *Menú de Opciones - ${inbox.name}*\n\nEscribe el número de tu consulta:\n\n1️⃣ Estado de mi pedido\n2️⃣ Información de envío\n3️⃣ Devoluciones y cambios\n4️⃣ Precios y productos\n5️⃣ Problemas con mi cuenta\n6️⃣ Facturación y pagos\n7️⃣ Disponibilidad de productos\n8️⃣ Horarios y contacto\n9️⃣ 🙋 Hablar con un agente humano\n\n💬 O simplemente escribe tu pregunta y te ayudaré.`;
   
 } else if (message === '2') {
   intent = 'shipping';
@@ -110,7 +113,7 @@ if (message.includes('menu') || message.includes('menú') || message.includes('o
     
 } else if (message.includes('hola') || message.includes('buenos') || message.includes('buenas') || message.includes('hello') || message.includes('hi')) {
   intent = 'greeting';
-  response = `¡Hola ${senderName}! 👋 Bienvenido a ${config.name}.\n\n📋 *¿Cómo puedo ayudarte hoy?*\n\nEscribe *MENU* para ver todas las opciones, o directamente:\n\n0️⃣ Centro de ayuda y tutoriales 📚\n1️⃣ Estado de pedido\n2️⃣ Envíos\n3️⃣ Devoluciones\n4️⃣ Precios\n5️⃣ Mi cuenta\n6️⃣ Facturación\n7️⃣ Disponibilidad\n8️⃣ Contacto\n9️⃣ Hablar con agente\n\n💬 O escribe tu pregunta libremente.`;
+  response = `¡Hola ${senderName}! 👋 Bienvenido a Vitrinnea ${inbox.greeting}.\n\n📋 *¿Cómo puedo ayudarte hoy?*\n\nEscribe *MENU* para ver todas las opciones, o directamente:\n\n1️⃣ Estado de pedido\n2️⃣ Envíos\n3️⃣ Devoluciones\n4️⃣ Precios\n5️⃣ Mi cuenta\n6️⃣ Facturación\n7️⃣ Disponibilidad\n8️⃣ Contacto\n9️⃣ Hablar con agente\n\n💬 O escribe tu pregunta libremente.`;
 } else if (message.includes('precio') || message.includes('cost') || message.includes('cuánto') || message.includes('cuanto')) {
   intent = 'pricing';
   response = '💰 Con gusto te ayudo con información de precios. ¿Qué producto te interesa? Puedes enviarme el nombre o enlace del artículo.\n\n_Escribe MENU para ver todas las opciones._';
@@ -163,43 +166,18 @@ if (isUrgent && isBusinessHours && !needsHuman) {
   needsHuman = true;
 }
 
-// Detect menu option from message
-let menuOption = null;
-if (message === '0' || intent === 'help_center') menuOption = '0';
-else if (message === '1' || intent === 'order_status') menuOption = '1';
-else if (message === '2' || intent === 'shipping') menuOption = '2';
-else if (message === '3' || intent === 'returns') menuOption = '3';
-else if (message === '4' || intent === 'pricing') menuOption = '4';
-else if (message === '5' || intent === 'account') menuOption = '5';
-else if (message === '6' || intent === 'billing') menuOption = '6';
-else if (message === '7' || intent === 'availability') menuOption = '7';
-else if (message === '8' || intent === 'contact') menuOption = '8';
-else if (message === '9' || intent === 'request_agent') menuOption = '9';
-
-// Prepare output data
-const outputData = {
+return {
   conversation_id: conversationId,
   account_id: accountId,
   inbox_id: inboxId,
-  inbox_name: config.name,
+  inbox_name: inbox.name,
   sender_name: senderName,
   original_message: body.content,
   intent: intent,
-  menu_option: menuOption,
   response_text: response,
   is_urgent: isUrgent,
   is_negative: isNegative,
   order_number: orderNumber,
   needs_human: needsHuman,
-  business_hours: isBusinessHours,
-  track_analytics: TRACK_ANALYTICS,
-  timestamp: new Date().toISOString()
+  business_hours: isBusinessHours
 };
-
-// If analytics tracking is enabled, prepare data for Supabase insert
-if (TRACK_ANALYTICS) {
-  outputData.supabase_url = SUPABASE_URL;
-  outputData.supabase_key = SUPABASE_KEY;
-}
-
-return outputData;

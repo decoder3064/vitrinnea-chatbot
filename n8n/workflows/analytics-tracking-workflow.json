@@ -1,0 +1,109 @@
+{
+  "name": "Supabase Analytics Tracking HTTP Request",
+  "version": "1.0.0",
+  "description": "n8n workflow to track engagement data in Supabase",
+  "workflow": {
+    "name": "Track Bot Analytics to Supabase",
+    "nodes": [
+      {
+        "name": "Start",
+        "type": "n8n-nodes-base.start",
+        "position": [250, 300]
+      },
+      {
+        "name": "Check Analytics Enabled",
+        "type": "n8n-nodes-base.if",
+        "position": [450, 300],
+        "parameters": {
+          "conditions": {
+            "boolean": [
+              {
+                "value1": "={{$json.track_analytics}}",
+                "value2": true
+              }
+            ]
+          }
+        }
+      },
+      {
+        "name": "Prepare Supabase Data",
+        "type": "n8n-nodes-base.code",
+        "position": [650, 250],
+        "parameters": {
+          "jsCode": "const item = $input.item.json;\n\nreturn {\n  conversation_id: item.conversation_id,\n  account_id: item.account_id,\n  inbox_id: item.inbox_id,\n  inbox_name: item.inbox_name,\n  sender_name: item.sender_name,\n  intent: item.intent,\n  menu_option: item.menu_option || null,\n  original_message: item.original_message,\n  is_urgent: item.is_urgent || false,\n  is_negative: item.is_negative || false,\n  needs_human: item.needs_human || false,\n  business_hours: item.business_hours || false,\n  order_number: item.order_number || null,\n  timestamp: item.timestamp || new Date().toISOString()\n};"
+        }
+      },
+      {
+        "name": "Insert to Supabase",
+        "type": "n8n-nodes-base.httpRequest",
+        "position": [850, 250],
+        "parameters": {
+          "method": "POST",
+          "url": "={{$node['Check Analytics Enabled'].json.supabase_url}}/rest/v1/engagement_tracking",
+          "authentication": "genericCredentialType",
+          "genericAuthType": "httpHeaderAuth",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "apikey",
+                "value": "={{$node['Check Analytics Enabled'].json.supabase_key}}"
+              },
+              {
+                "name": "Authorization",
+                "value": "=Bearer {{$node['Check Analytics Enabled'].json.supabase_key}}"
+              },
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "name": "Prefer",
+                "value": "return=representation"
+              }
+            ]
+          },
+          "jsonParameters": true,
+          "bodyParametersJson": "={{$json}}"
+        }
+      },
+      {
+        "name": "Continue Workflow",
+        "type": "n8n-nodes-base.noOp",
+        "position": [1050, 250]
+      },
+      {
+        "name": "Skip Analytics",
+        "type": "n8n-nodes-base.noOp",
+        "position": [650, 350]
+      }
+    ],
+    "connections": {
+      "Start": {
+        "main": [[{"node": "Check Analytics Enabled", "type": "main", "index": 0}]]
+      },
+      "Check Analytics Enabled": {
+        "main": [
+          [{"node": "Prepare Supabase Data", "type": "main", "index": 0}],
+          [{"node": "Skip Analytics", "type": "main", "index": 0}]
+        ]
+      },
+      "Prepare Supabase Data": {
+        "main": [[{"node": "Insert to Supabase", "type": "main", "index": 0}]]
+      },
+      "Insert to Supabase": {
+        "main": [[{"node": "Continue Workflow", "type": "main", "index": 0}]]
+      }
+    }
+  },
+  "instructions": [
+    "1. Import this workflow into your n8n instance",
+    "2. Set up environment variables in n8n:",
+    "   - SUPABASE_URL: Your Supabase project URL",
+    "   - SUPABASE_ANON_KEY: Your Supabase anon/public key",
+    "3. Add this workflow as a sub-workflow or merge nodes into your main message handler workflow",
+    "4. The workflow will automatically track all interactions to Supabase when analytics is enabled",
+    "5. Make sure you've run the supabase-schema.sql script in your Supabase SQL editor first"
+  ],
+  "notes": "This workflow should be integrated after the main message handler code node. It will check if analytics tracking is enabled and insert engagement data into Supabase."
+}

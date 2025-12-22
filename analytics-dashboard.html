@@ -1,0 +1,537 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vitrinnea - Analytics Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+        
+        h1 {
+            color: white;
+            text-align: center;
+            margin-bottom: 30px;
+            font-size: 2.5rem;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.2);
+        }
+        
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        
+        .stat-card {
+            background: white;
+            border-radius: 15px;
+            padding: 25px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            transition: transform 0.3s ease;
+        }
+        
+        .stat-card:hover {
+            transform: translateY(-5px);
+        }
+        
+        .stat-card h3 {
+            color: #667eea;
+            font-size: 0.9rem;
+            text-transform: uppercase;
+            margin-bottom: 10px;
+            letter-spacing: 1px;
+        }
+        
+        .stat-card .value {
+            font-size: 2.5rem;
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 5px;
+        }
+        
+        .stat-card .label {
+            color: #666;
+            font-size: 0.85rem;
+        }
+        
+        .chart-container {
+            background: white;
+            border-radius: 15px;
+            padding: 25px;
+            margin-bottom: 20px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+        
+        .chart-container h2 {
+            color: #333;
+            margin-bottom: 20px;
+            font-size: 1.5rem;
+        }
+        
+        .chart-wrapper {
+            position: relative;
+            height: 400px;
+        }
+        
+        .filters {
+            background: white;
+            border-radius: 15px;
+            padding: 20px;
+            margin-bottom: 30px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+        
+        .filters label {
+            color: #333;
+            font-weight: 600;
+        }
+        
+        .filters select,
+        .filters input {
+            padding: 10px 15px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 0.95rem;
+            background: white;
+            cursor: pointer;
+            transition: border-color 0.3s ease;
+        }
+        
+        .filters select:hover,
+        .filters input:hover {
+            border-color: #667eea;
+        }
+        
+        .filters button {
+            padding: 10px 25px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+        
+        .filters button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+        
+        .loading {
+            text-align: center;
+            color: white;
+            font-size: 1.2rem;
+            padding: 50px;
+        }
+        
+        .error {
+            background: #ff4444;
+            color: white;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+        
+        @media (max-width: 768px) {
+            h1 {
+                font-size: 1.8rem;
+            }
+            
+            .chart-wrapper {
+                height: 300px;
+            }
+            
+            .filters {
+                flex-direction: column;
+                align-items: stretch;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📊 Vitrinnea Analytics Dashboard</h1>
+        
+        <div id="error-message" class="error" style="display: none;"></div>
+        
+        <div class="filters">
+            <label for="date-range">Rango de Fechas:</label>
+            <select id="date-range">
+                <option value="today">Hoy</option>
+                <option value="week" selected>Última Semana</option>
+                <option value="month">Último Mes</option>
+                <option value="all">Todo el Tiempo</option>
+            </select>
+            
+            <label for="inbox-filter">Inbox:</label>
+            <select id="inbox-filter">
+                <option value="all">Todos</option>
+            </select>
+            
+            <button onclick="loadData()">🔄 Actualizar</button>
+        </div>
+        
+        <div class="stats-grid">
+            <div class="stat-card">
+                <h3>Total Interacciones</h3>
+                <div class="value" id="total-interactions">-</div>
+                <div class="label">mensajes procesados</div>
+            </div>
+            
+            <div class="stat-card">
+                <h3>Conversaciones Únicas</h3>
+                <div class="value" id="unique-conversations">-</div>
+                <div class="label">usuarios diferentes</div>
+            </div>
+            
+            <div class="stat-card">
+                <h3>Escalaciones</h3>
+                <div class="value" id="escalations">-</div>
+                <div class="label">solicitudes de agente humano</div>
+            </div>
+            
+            <div class="stat-card">
+                <h3>Tasa de Resolución Bot</h3>
+                <div class="value" id="bot-resolution">-</div>
+                <div class="label">% resuelto sin humano</div>
+            </div>
+        </div>
+        
+        <div class="chart-container">
+            <h2>📈 Opciones de Menú Más Populares</h2>
+            <div class="chart-wrapper">
+                <canvas id="menu-options-chart"></canvas>
+            </div>
+        </div>
+        
+        <div class="chart-container">
+            <h2>🎯 Intenciones de Usuario</h2>
+            <div class="chart-wrapper">
+                <canvas id="intent-chart"></canvas>
+            </div>
+        </div>
+        
+        <div class="chart-container">
+            <h2>📅 Interacciones por Hora del Día</h2>
+            <div class="chart-wrapper">
+                <canvas id="hourly-chart"></canvas>
+            </div>
+        </div>
+        
+        <div class="chart-container">
+            <h2>📬 Rendimiento por Inbox</h2>
+            <div class="chart-wrapper">
+                <canvas id="inbox-chart"></canvas>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        // Supabase Configuration - REPLACE WITH YOUR VALUES
+        const SUPABASE_URL = 'YOUR_SUPABASE_URL';
+        const SUPABASE_KEY = 'YOUR_SUPABASE_ANON_KEY';
+        
+        if (SUPABASE_URL === 'YOUR_SUPABASE_URL') {
+            document.getElementById('error-message').textContent = '⚠️ Por favor configura tus credenciales de Supabase en el archivo HTML';
+            document.getElementById('error-message').style.display = 'block';
+        }
+        
+        const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+        
+        let charts = {};
+        
+        async function loadData() {
+            try {
+                const dateRange = document.getElementById('date-range').value;
+                const inboxFilter = document.getElementById('inbox-filter').value;
+                
+                let query = supabase.from('engagement_tracking').select('*');
+                
+                // Apply date filter
+                const now = new Date();
+                if (dateRange === 'today') {
+                    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+                    query = query.gte('timestamp', today.toISOString());
+                } else if (dateRange === 'week') {
+                    const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+                    query = query.gte('timestamp', weekAgo.toISOString());
+                } else if (dateRange === 'month') {
+                    const monthAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+                    query = query.gte('timestamp', monthAgo.toISOString());
+                }
+                
+                // Apply inbox filter
+                if (inboxFilter !== 'all') {
+                    query = query.eq('inbox_id', parseInt(inboxFilter));
+                }
+                
+                const { data, error } = await query;
+                
+                if (error) throw error;
+                
+                updateStats(data);
+                updateCharts(data);
+                
+            } catch (error) {
+                console.error('Error loading data:', error);
+                document.getElementById('error-message').textContent = '❌ Error cargando datos: ' + error.message;
+                document.getElementById('error-message').style.display = 'block';
+            }
+        }
+        
+        function updateStats(data) {
+            const totalInteractions = data.length;
+            const uniqueConversations = new Set(data.map(d => d.conversation_id)).size;
+            const escalations = data.filter(d => d.needs_human).length;
+            const botResolution = ((1 - escalations / totalInteractions) * 100).toFixed(1);
+            
+            document.getElementById('total-interactions').textContent = totalInteractions.toLocaleString();
+            document.getElementById('unique-conversations').textContent = uniqueConversations.toLocaleString();
+            document.getElementById('escalations').textContent = escalations.toLocaleString();
+            document.getElementById('bot-resolution').textContent = botResolution + '%';
+        }
+        
+        function updateCharts(data) {
+            updateMenuOptionsChart(data);
+            updateIntentChart(data);
+            updateHourlyChart(data);
+            updateInboxChart(data);
+        }
+        
+        function updateMenuOptionsChart(data) {
+            const menuData = data.filter(d => d.menu_option);
+            const counts = {};
+            
+            menuData.forEach(d => {
+                counts[d.menu_option] = (counts[d.menu_option] || 0) + 1;
+            });
+            
+            const labels = Object.keys(counts).sort();
+            const values = labels.map(l => counts[l]);
+            
+            const menuLabels = {
+                '0': '📚 Centro de Ayuda',
+                '1': '📦 Estado de Pedido',
+                '2': '🚚 Envíos',
+                '3': '🔄 Devoluciones',
+                '4': '💰 Precios',
+                '5': '👤 Mi Cuenta',
+                '6': '💳 Facturación',
+                '7': '📊 Disponibilidad',
+                '8': '📞 Contacto',
+                '9': '🙋 Agente Humano'
+            };
+            
+            const chartLabels = labels.map(l => menuLabels[l] || 'Opción ' + l);
+            
+            if (charts.menuOptions) charts.menuOptions.destroy();
+            
+            const ctx = document.getElementById('menu-options-chart').getContext('2d');
+            charts.menuOptions = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: chartLabels,
+                    datasets: [{
+                        label: 'Número de Usos',
+                        data: values,
+                        backgroundColor: 'rgba(102, 126, 234, 0.8)',
+                        borderColor: 'rgba(102, 126, 234, 1)',
+                        borderWidth: 2
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: false
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: {
+                                stepSize: 1
+                            }
+                        }
+                    }
+                }
+            });
+        }
+        
+        function updateIntentChart(data) {
+            const counts = {};
+            data.forEach(d => {
+                counts[d.intent] = (counts[d.intent] || 0) + 1;
+            });
+            
+            const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 10);
+            const labels = sorted.map(s => s[0]);
+            const values = sorted.map(s => s[1]);
+            
+            if (charts.intent) charts.intent.destroy();
+            
+            const ctx = document.getElementById('intent-chart').getContext('2d');
+            charts.intent = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        data: values,
+                        backgroundColor: [
+                            '#667eea', '#764ba2', '#f093fb', '#4facfe',
+                            '#43e97b', '#fa709a', '#fee140', '#30cfd0',
+                            '#a8edea', '#fed6e3'
+                        ]
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false
+                }
+            });
+        }
+        
+        function updateHourlyChart(data) {
+            const hourCounts = new Array(24).fill(0);
+            
+            data.forEach(d => {
+                const hour = new Date(d.timestamp).getHours();
+                hourCounts[hour]++;
+            });
+            
+            if (charts.hourly) charts.hourly.destroy();
+            
+            const ctx = document.getElementById('hourly-chart').getContext('2d');
+            charts.hourly = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: Array.from({length: 24}, (_, i) => i + ':00'),
+                    datasets: [{
+                        label: 'Interacciones',
+                        data: hourCounts,
+                        borderColor: '#667eea',
+                        backgroundColor: 'rgba(102, 126, 234, 0.1)',
+                        tension: 0.4,
+                        fill: true
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: false
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true
+                        }
+                    }
+                }
+            });
+        }
+        
+        function updateInboxChart(data) {
+            const inboxCounts = {};
+            
+            data.forEach(d => {
+                const name = d.inbox_name || 'Unknown';
+                inboxCounts[name] = (inboxCounts[name] || 0) + 1;
+            });
+            
+            const labels = Object.keys(inboxCounts);
+            const values = Object.values(inboxCounts);
+            
+            if (charts.inbox) charts.inbox.destroy();
+            
+            const ctx = document.getElementById('inbox-chart').getContext('2d');
+            charts.inbox = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Interacciones por Inbox',
+                        data: values,
+                        backgroundColor: 'rgba(118, 75, 162, 0.8)',
+                        borderColor: 'rgba(118, 75, 162, 1)',
+                        borderWidth: 2
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    indexAxis: 'y',
+                    plugins: {
+                        legend: {
+                            display: false
+                        }
+                    },
+                    scales: {
+                        x: {
+                            beginAtZero: true
+                        }
+                    }
+                }
+            });
+        }
+        
+        async function loadInboxFilters() {
+            try {
+                const { data, error } = await supabase
+                    .from('engagement_tracking')
+                    .select('inbox_id, inbox_name')
+                    .not('inbox_id', 'is', null);
+                
+                if (error) throw error;
+                
+                const inboxes = [...new Map(data.map(item => [item.inbox_id, item])).values()];
+                const select = document.getElementById('inbox-filter');
+                
+                inboxes.forEach(inbox => {
+                    const option = document.createElement('option');
+                    option.value = inbox.inbox_id;
+                    option.textContent = inbox.inbox_name || `Inbox ${inbox.inbox_id}`;
+                    select.appendChild(option);
+                });
+            } catch (error) {
+                console.error('Error loading inbox filters:', error);
+            }
+        }
+        
+        // Initialize
+        if (SUPABASE_URL !== 'YOUR_SUPABASE_URL') {
+            loadInboxFilters();
+            loadData();
+            
+            // Auto-refresh every 5 minutes
+            setInterval(loadData, 5 * 60 * 1000);
+        }
+    </script>
+</body>
+</html>
