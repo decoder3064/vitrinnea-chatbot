@@ -48,5 +48,8 @@ backups/
 # Secrets
 secrets/
 *.key
+
+# n8n workflows with credentials (keep local only)
+n8n/workflows/*.json
 *.pem
 *.cert

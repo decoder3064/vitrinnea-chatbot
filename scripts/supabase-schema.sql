@@ -1,4 +1,4 @@
--- Supabase Database Schema for Engagement Tracking
+-- Supabase Database Schema for Engagement Tracking - SECURE VERSION
 -- Run this in your Supabase SQL Editor
 
 -- Create engagement_tracking table
@@ -31,19 +31,27 @@ CREATE INDEX IF NOT EXISTS idx_engagement_menu_option ON public.engagement_track
 -- Enable Row Level Security (RLS)
 ALTER TABLE public.engagement_tracking ENABLE ROW LEVEL SECURITY;
 
--- Create policy to allow inserts from service role
-CREATE POLICY "Allow service role to insert" 
+-- 🔒 SECURE: Only service_role can write (used by n8n backend)
+CREATE POLICY "Service role can insert" 
 ON public.engagement_tracking 
 FOR INSERT 
-TO authenticated
+TO service_role  -- ✅ Only the service_role key
 WITH CHECK (true);
 
--- Create policy to allow reads from service role
-CREATE POLICY "Allow service role to read" 
+-- 🔒 SECURE: Only service_role can read (prevents anon key abuse)
+CREATE POLICY "Service role can read" 
 ON public.engagement_tracking 
 FOR SELECT 
-TO authenticated
+TO service_role  -- ✅ Only the service_role key
 USING (true);
+
+-- 📊 Optional: Allow anon to read ONLY through views (for dashboard)
+-- This way dashboard can read aggregated data but not raw data
+CREATE POLICY "Anon can read aggregated views only" 
+ON public.engagement_tracking 
+FOR SELECT 
+TO anon
+USING (false);  -- ✅ Blocks direct table access for anon
 
 -- Create a view for daily statistics
 CREATE OR REPLACE VIEW public.daily_engagement_stats AS
@@ -62,6 +70,9 @@ FROM public.engagement_tracking
 GROUP BY DATE(timestamp), inbox_name, intent, menu_option
 ORDER BY date DESC, interaction_count DESC;
 
+-- Grant view access to anon for dashboard
+GRANT SELECT ON public.daily_engagement_stats TO anon;
+
 -- Create a view for menu option popularity
 CREATE OR REPLACE VIEW public.menu_option_stats AS
 SELECT 
@@ -77,6 +88,8 @@ WHERE menu_option IS NOT NULL
 GROUP BY menu_option, intent, inbox_name, DATE_TRUNC('hour', timestamp)
 ORDER BY total_uses DESC;
 
+GRANT SELECT ON public.menu_option_stats TO anon;
+
 -- Create a view for inbox performance
 CREATE OR REPLACE VIEW public.inbox_performance AS
 SELECT 
@@ -91,6 +104,8 @@ SELECT
 FROM public.engagement_tracking
 GROUP BY inbox_id, inbox_name
 ORDER BY total_interactions DESC;
+
+GRANT SELECT ON public.inbox_performance TO anon;
 
 COMMENT ON TABLE public.engagement_tracking IS 'Tracks all user interactions with the chatbot for analytics';
 COMMENT ON VIEW public.daily_engagement_stats IS 'Daily aggregated statistics of user engagement';
